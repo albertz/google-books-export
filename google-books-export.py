@@ -12,7 +12,7 @@ except: debug = False
 
 debug_shell = None
 try:
-	sys.path += [os.path.expanduser("~/Programmierung/py_better_exchook")]
+	#sys.path += [os.path.expanduser("~/Programmierung/py_better_exchook")]
 	import better_exchook
 	better_exchook.install()
 	debug_shell = better_exchook.debug_shell

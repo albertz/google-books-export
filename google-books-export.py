@@ -15,7 +15,18 @@ try:
 	#sys.path += [os.path.expanduser("~/Programmierung/py_better_exchook")]
 	import better_exchook
 	better_exchook.install()
-	debug_shell = better_exchook.debug_shell
+	orig_debug_shell = better_exchook.debug_shell
+	
+	# wrap debug_shell so that we don't end up calling it recursively
+	debug_shell_running = False
+	def debug_shell(l, g):
+		global debug_shell_running
+		if debug_shell_running: return
+		debug_shell_running = True
+		orig_debug_shell(l, g)
+		debug_shell_running = False
+	better_exchook.debug_shell = debug_shell
+	
 	# debug shell: better_exchook.debug_shell(locals(), globals())
 except:
 	print "failed to import better_exchook"
@@ -122,14 +133,16 @@ def submitClick(n):
 	
 def onFinishedLoading( result ):
 	global webNextAction
+	print "finished loading:", web.mainFrame().baseUrl()
+	if webNextAction is None: return
 	#print "huhu", result, webNextAction
 	#dumpHtmlTree(web)
 	#print unicode(getRoot(web).toPlainText()).encode("utf-8")
 	try:
 		assert result, "failed to load web page"
 		webNextAction()
-		if webNextAction is not None:
-			time.sleep(3)
+		#if webNextAction is not None:
+		#	time.sleep(3)
 	except:
 		sys.excepthook(*sys.exc_info())
 		print "page content:", unicode(getRoot(web).toPlainText()).encode("utf-8")
@@ -193,16 +206,100 @@ def loadUrl(l):
 
 debug_shell_here = lambda: debug_shell(locals(), globals())
 
+try: bookUrl = sys.argv[1]
+except:
+	loadUrl("http://books.google.com")
+	assert view, "we need user interaction"
+	raw_input("Press enter once you selected the book")
+	bookUrl = unicode(web.mainFrame().baseUrl())
 
+def findPageSelectorNodes():
+	nextPageImgNodes = [ n for n in findNodes("img") if n.attribute("src").contains("page_right.png") ]
+	assert len(nextPageImgNodes) == 1
+	nextPageImgNode = nextPageImgNodes[0]
+	nextPageNode = nextPageImgNode.parent()
+	assert nextPageNode.tagName() == "DIV"
+	prevPageNode = nextPageNode.previousSibling()
+	assert prevPageNode.tagName() == "DIV"
+	curPageNode = prevPageNode.previousSibling()
+	assert curPageNode.tagName() == "DIV"
+	assert curPageNode.toPlainText().contains("Page")
+	return curPageNode, prevPageNode, nextPageNode
+
+def getCurPage():
+	curPageNode,_,_ = findPageSelectorNodes()
+	txt = unicode(curPageNode.toPlainText())[len("Page"):]
+	try: return int(txt)
+	except: return -1
+
+def selectPage(num):
+	curPage = getCurPage()
+	if num > curPage:
+		while num > getCurPage():
+			_,_,nextPageNode = findPageSelectorNodes()
+			submitClick(nextPageNode)
+	if num < curPage:
+		while num < getCurPage():
+			_,prevPageNode,_ = findPageSelectorNodes()
+			submitClick(prevPageNode)
+	assert num == getCurPage()
+	
+def paramsFromUrl(url):
+	url = unicode(url) # in case it is a QString
+	parsedUrl = urlparse.urlparse(url)
+	return dict(urlparse.parse_qsl(parsedUrl.query))
+
+
+	
+def findPageImages():
+	pageImages = {}
+	for n in findNodes("img"):
+		widthAttrib = n.attribute("width")
+		if widthAttrib.isEmpty(): continue
+		width = int(widthAttrib)
+		if width < 500: continue
+		srcParams = paramsFromUrl(n.attribute("src"))
+		if "pg" not in srcParams: continue
+		pageImages[srcParams["pg"]] = n
+	return sorted(pageImages.iteritems())
+
+
+startPage = int(sys.argv[2])
+endPage = int(sys.argv[3])
+assert startPage <= endPage
+curPageToExport = startPage
+
+def web_selectNextPage():
+	global webNextAction, curPageToExport
+	
+	curPage = getCurPage()
+	if curPage != curPageToExport:
+		selectPage(curPageToExport)
+		#return # wait for selection...?
+		
+	#webNextAction = None
+	
+
+def fixupBookUrl(url):
+	import urlparse, urllib
+	parsedUrl = list(urlparse.urlparse(url))
+	parsedUrl[1] = "books.google.com"
+	query = dict(urlparse.parse_qsl(parsedUrl[4]))
+	query["hl"] = "en"
+	parsedUrl[4] = urllib.urlencode(query)
+	return urlparse.urlunparse(parsedUrl)
+	
 def doExport():
-	global webNextAction, success
+	global webNextAction, success, bookUrl
 	success = False
-	webNextAction = None
-	loadUrl("http://books.google.com/")
+	webNextAction = debug_shell_here
+	bookUrl = fixupBookUrl(bookUrl)
+	loadUrl(bookUrl)
 	while webNextAction is not None:
 		time.sleep(0.1)
 		app.processEvents()
 	return success
+
 
 mydir = os.path.dirname(__file__)
 LogFile = mydir + "/google-books-export.log"

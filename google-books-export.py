@@ -19,11 +19,11 @@ try:
 	
 	# wrap debug_shell so that we don't end up calling it recursively
 	debug_shell_running = False
-	def debug_shell(l, g):
+	def debug_shell(user_ns, user_global_ns):
 		global debug_shell_running
 		if debug_shell_running: return
 		debug_shell_running = True
-		orig_debug_shell(l, g)
+		orig_debug_shell(user_ns, user_global_ns)
 		debug_shell_running = False
 	better_exchook.debug_shell = debug_shell
 	
@@ -279,33 +279,48 @@ def findPageImages():
 startPage = int(sys.argv[2])
 endPage = int(sys.argv[3])
 assert startPage <= endPage
-curPageToExport = startPage
+
+def getPageImage(num):
+	imgs = dict(findPageImages())
+	return imgs[num]
 
 def pageImageLoaded(num):
-	imgs = dict(findPageImages())
-	img = imgs[num]
+	img = getPageImage(num)
 	return img.geometry().height() > 0
 
+def exportCurPage():
+	global mydir
+	curPage = getCurPage()
+	imgNode = getPageImage(curPage)
+	img = QImage(imgNode.geometry().size(), QImage.Format_ARGB32)
+	imgPainter = QPainter(img)
+	imgNode.render(imgPainter)
+	imgNode.render(imgPainter) # again...
+	imgPainter.end()
+	img.save(mydir + "/page%i.png" % curPage)	
+
 def web_selectNextPage():
-	global webNextAction, curPageToExport, endPage
+	global webNextAction, startPage, endPage
+
+	selectPage(startPage)
 	
 	while True:
 		curPage = getCurPage()
-		if curPage != curPageToExport:
-			selectPage(curPageToExport)
-			#return # wait for selection...?
-		
-		while not pageImageLoaded(curPageToExport):
-			time.sleep(0.1)
-			app.processEvents()
-	
-		# TODO: export
-		print "export", curPageToExport, "..."
-		
-		curPageToExport += 1
-		if curPageToExport > endPage:
+		if curPage > endPage:
 			print "finished"
 			break
+		
+		while not pageImageLoaded(curPage):
+			time.sleep(0.1)
+			app.processEvents()
+
+		# TODO: export
+		print "export", curPage, "..."
+		exportCurPage()
+		
+		# select next
+		_,_,nextPageNode = findPageSelectorNodes()
+		submitClickNative(nextPageNode)
 
 	webNextAction = None
 		

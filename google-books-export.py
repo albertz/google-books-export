@@ -211,8 +211,10 @@ print "logfile:", LogFile
 try:
 	log = eval(open(LogFile).read())
 	assert isinstance(log, dict)
+except IOError: # e.g. file-not-found. that's ok
+	log = {}
 except:
-	print "failed to load logfile (if this is the first run, this can be ignored)"
+	print "logfile reading error"
 	sys.excepthook(*sys.exc_info())
 	log = {}
 

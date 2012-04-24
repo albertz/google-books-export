@@ -130,6 +130,15 @@ def submitClick(n):
 		"evObj.initEvent( 'click', true, true );" +
 		"this.dispatchEvent(evObj);")
 
+def submitClickNative(n):
+	# http://stackoverflow.com/questions/2655414/qt-force-qwebview-to-click-on-a-web-element-even-one-not-visible-on-the-window
+	center = n.geometry().center()
+	n.setFocus()
+	eventArgs = center, Qt.MouseButton(1), Qt.MouseButtons(1), Qt.KeyboardModifiers(0)
+	pressEvent = QMouseEvent(QMouseEvent.MouseButtonPress, *eventArgs)
+	app.sendEvent(web, pressEvent)
+	releaseEvent = QMouseEvent(QMouseEvent.MouseButtonRelease, *eventArgs)
+	app.sendEvent(web, releaseEvent)
 	
 def onFinishedLoading( result ):
 	global webNextAction
@@ -237,11 +246,11 @@ def selectPage(num):
 	if num > curPage:
 		while num > getCurPage():
 			_,_,nextPageNode = findPageSelectorNodes()
-			submitClick(nextPageNode)
+			submitClickNative(nextPageNode)
 	if num < curPage:
 		while num < getCurPage():
 			_,prevPageNode,_ = findPageSelectorNodes()
-			submitClick(prevPageNode)
+			submitClickNative(prevPageNode)
 	assert num == getCurPage()
 	
 def paramsFromUrl(url):
@@ -260,7 +269,10 @@ def findPageImages():
 		if width < 500: continue
 		srcParams = paramsFromUrl(n.attribute("src"))
 		if "pg" not in srcParams: continue
-		pageImages[srcParams["pg"]] = n
+		pgText = srcParams["pg"]
+		if pgText[0:2] != "PA": continue
+		pg = int(pgText[2:])
+		pageImages[pg] = n
 	return sorted(pageImages.iteritems())
 
 
@@ -269,16 +281,34 @@ endPage = int(sys.argv[3])
 assert startPage <= endPage
 curPageToExport = startPage
 
+def pageImageLoaded(num):
+	imgs = dict(findPageImages())
+	img = imgs[num]
+	return img.geometry().height() > 0
+
 def web_selectNextPage():
-	global webNextAction, curPageToExport
+	global webNextAction, curPageToExport, endPage
 	
-	curPage = getCurPage()
-	if curPage != curPageToExport:
-		selectPage(curPageToExport)
-		#return # wait for selection...?
+	while True:
+		curPage = getCurPage()
+		if curPage != curPageToExport:
+			selectPage(curPageToExport)
+			#return # wait for selection...?
 		
-	#webNextAction = None
+		while not pageImageLoaded(curPageToExport):
+			time.sleep(0.1)
+			app.processEvents()
 	
+		# TODO: export
+		print "export", curPageToExport, "..."
+		
+		curPageToExport += 1
+		if curPageToExport > endPage:
+			print "finished"
+			break
+
+	webNextAction = None
+		
 
 def fixupBookUrl(url):
 	import urlparse, urllib
@@ -292,7 +322,7 @@ def fixupBookUrl(url):
 def doExport():
 	global webNextAction, success, bookUrl
 	success = False
-	webNextAction = debug_shell_here
+	webNextAction = web_selectNextPage
 	bookUrl = fixupBookUrl(bookUrl)
 	loadUrl(bookUrl)
 	while webNextAction is not None:

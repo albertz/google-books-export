@@ -313,7 +313,7 @@ def exportCurPage():
 
 	# for some reason, this code works... ???
 	# i dont really understand why
-	while True:
+	while False:
 		curVisible = imgVisibleRect(imgNode)
 
 		img = QImage(imgSize, QImage.Format_ARGB32)
@@ -335,8 +335,10 @@ def exportCurPage():
 	
 		img.save(mydir + "/page%i.png" % curPage)
 		return
+
+	img = QImage(imgSize, QImage.Format_ARGB32)
+	imgPainter = QPainter(img)
 	
-	# This is incomplete. However, this is how I guess it should be
 	# It scrolls always around and copies the visible area until
 	# the whole image has been copied.
 	# Note that we cannot render a subpart of the image, thus the
@@ -346,23 +348,29 @@ def exportCurPage():
 		imgNode = getPageImage(curPage) # there might be a new imgNode
 		curVisible = imgVisibleRect(imgNode)
 
-		img = QImage(imgSize, QImage.Format_ARGB32)
-		imgPainter = QPainter(img)
-		imgNode.render(imgPainter, curVisible)
-		imgPainter.end()
+		subimg = QImage(imgSize, QImage.Format_ARGB32)
+		subimgPainter = QPainter(subimg)
+		imgNode.render(subimgPainter)
+		subimgPainter.end()
 
-		# hm...
-		print curVisible, imgSize
-		#img.save(mydir + "/page%i_%i_%i.png" % (curPage,curVisible.left(),curVisible.top()))
+		imgPainter.drawImage(
+			curVisible.left(), curVisible.top(),
+			subimg,
+			curVisible.left(), curVisible.top(),
+			curVisible.width(), curVisible.height())
+
+		#print curVisible, imgSize
+		#subimg.save(mydir + "/page%i_%i_%i.png" % (curPage,curVisible.left(),curVisible.top()))
 		if curVisible.right() < imgSize.width() - 1:
 			scrollViewport(100,0)
 		elif curVisible.bottom() < imgSize.height() - 1:
-			break
 			scrollViewport(-imgSize.width(),0) # back to left
 			scrollViewport(0,100)
 		else:
 			break
 	
+	imgPainter.end()
+	img.save(mydir + "/page%i.png" % curPage)
 	
 def web_selectNextPage():
 	global webNextAction, startPage, endPage

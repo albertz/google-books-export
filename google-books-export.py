@@ -200,8 +200,11 @@ if debug:
 	web = view.page()
 	view.show()
 else:
-	view = None
-	web = QWebPage()
+	#view = None
+	#web = QWebPage()
+	# we need a QWebView for the img drawing
+	view = QWebView()
+	web = view.page()
 
 web.connect(web, SIGNAL("loadFinished(bool)"), onFinishedLoading)
 
@@ -288,24 +291,91 @@ def pageImageLoaded(num):
 	img = getPageImage(num)
 	return img.geometry().height() > 0
 
+def scrollViewport(dx, dy):
+	# this is for now. make this more dynamic later...
+	outerViewportNode = list(findNodes("div",{"id":"viewport"}))[0]
+	scrollareaNode = outerViewportNode.firstChild()	
+	innerViewportNode = scrollareaNode.firstChild()
+	scrollareaNode.evaluateJavaScript("this.scrollLeft += %i" % dx)
+	scrollareaNode.evaluateJavaScript("this.scrollTop += %i" % dy)
+	app.processEvents()
+
+def imgVisibleRect(imgNode):
+	curVisible = imgNode.webFrame().geometry().intersect(imgNode.geometry())
+	curVisible = curVisible.translated(-imgNode.geometry().topLeft()) # relative
+	return curVisible
+
 def exportCurPage():
-	global mydir
+	global mydir, web
 	curPage = getCurPage()
 	imgNode = getPageImage(curPage)
-	img = QImage(imgNode.geometry().size(), QImage.Format_ARGB32)
-	imgPainter = QPainter(img)
-	imgNode.render(imgPainter)
-	imgNode.render(imgPainter) # again...
-	imgPainter.end()
-	img.save(mydir + "/page%i.png" % curPage)	
+	imgSize = imgNode.geometry().size()
 
+	# for some reason, this code works... ???
+	# i dont really understand why
+	while True:
+		curVisible = imgVisibleRect(imgNode)
+
+		img = QImage(imgSize, QImage.Format_ARGB32)
+		imgPainter = QPainter(img)
+		imgNode.render(imgPainter, curVisible)
+		imgPainter.end()
+	
+		scrollViewport(imgSize.width(),0)
+		app.processEvents()
+
+		imgNode = getPageImage(curPage) # there might be a new imgNode
+		curVisible = imgVisibleRect(imgNode)
+	
+		# Note: when not recreating the image here, it doesnt work??
+		img = QImage(imgSize, QImage.Format_ARGB32)
+		imgPainter = QPainter(img)
+		imgNode.render(imgPainter, curVisible)
+		imgPainter.end()
+	
+		img.save(mydir + "/page%i.png" % curPage)
+		return
+	
+	# This is incomplete. However, this is how I guess it should be
+	# It scrolls always around and copies the visible area until
+	# the whole image has been copied.
+	# Note that we cannot render a subpart of the image, thus the
+	# render clipRect can also be ignored here and we need
+	# some own image for every copy op.
+	while True:		
+		imgNode = getPageImage(curPage) # there might be a new imgNode
+		curVisible = imgVisibleRect(imgNode)
+
+		img = QImage(imgSize, QImage.Format_ARGB32)
+		imgPainter = QPainter(img)
+		imgNode.render(imgPainter, curVisible)
+		imgPainter.end()
+
+		# hm...
+		print curVisible, imgSize
+		#img.save(mydir + "/page%i_%i_%i.png" % (curPage,curVisible.left(),curVisible.top()))
+		if curVisible.right() < imgSize.width() - 1:
+			scrollViewport(100,0)
+		elif curVisible.bottom() < imgSize.height() - 1:
+			break
+			scrollViewport(-imgSize.width(),0) # back to left
+			scrollViewport(0,100)
+		else:
+			break
+	
+	
 def web_selectNextPage():
 	global webNextAction, startPage, endPage
+	webNextAction = None
 
 	selectPage(startPage)
+	lastPage = None
 	
 	while True:
 		curPage = getCurPage()
+		if lastPage is not None:
+			assert curPage > lastPage, "switching pages doesn't work"
+		lastPage = curPage
 		if curPage > endPage:
 			print "finished"
 			break
@@ -317,12 +387,12 @@ def web_selectNextPage():
 		# TODO: export
 		print "export", curPage, "..."
 		exportCurPage()
-		
+		#debug_shell(locals(), globals())
+		#return
+	
 		# select next
 		_,_,nextPageNode = findPageSelectorNodes()
 		submitClickNative(nextPageNode)
-
-	webNextAction = None
 		
 
 def fixupBookUrl(url):

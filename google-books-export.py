@@ -310,40 +310,16 @@ def exportCurPage():
 	curPage = getCurPage()
 	imgNode = getPageImage(curPage)
 	imgSize = imgNode.geometry().size()
-
-	# for some reason, this code works... ???
-	# i dont really understand why
-	while False:
-		curVisible = imgVisibleRect(imgNode)
-
-		img = QImage(imgSize, QImage.Format_ARGB32)
-		imgPainter = QPainter(img)
-		imgNode.render(imgPainter, curVisible)
-		imgPainter.end()
 	
-		scrollViewport(imgSize.width(),0)
-		app.processEvents()
-
-		imgNode = getPageImage(curPage) # there might be a new imgNode
-		curVisible = imgVisibleRect(imgNode)
-	
-		# Note: when not recreating the image here, it doesnt work??
-		img = QImage(imgSize, QImage.Format_ARGB32)
-		imgPainter = QPainter(img)
-		imgNode.render(imgPainter, curVisible)
-		imgPainter.end()
-	
-		img.save(mydir + "/page%i.png" % curPage)
-		return
-
-	img = QImage(imgSize, QImage.Format_ARGB32)
-	imgPainter = QPainter(img)
-	
+	# In some cases (always? most often), invisible areas of the image
+	# seem to be invalid. To overcome this:
 	# It scrolls always around and copies the visible area until
 	# the whole image has been copied.
 	# Note that we cannot render a subpart of the image, thus the
 	# render clipRect can also be ignored here and we need
 	# some own image for every copy op.
+	img = QImage(imgSize, QImage.Format_ARGB32)
+	imgPainter = QPainter(img)
 	while True:		
 		imgNode = getPageImage(curPage) # there might be a new imgNode
 		curVisible = imgVisibleRect(imgNode)

@@ -1,2 +1,4 @@
 *.log
 *.pyc
+page*.png
+.DS_Store

@@ -347,9 +347,11 @@ def exportCurPage():
 	
 	imgPainter.end()
 	img.save(mydir + "/page%i.png" % curPage)
-	
+
+pagelist = []
+
 def web_selectNextPage():
-	global webNextAction, startPage, endPage
+	global webNextAction, startPage, endPage, pagelist
 	webNextAction = None
 
 	selectPage(startPage)
@@ -368,11 +370,9 @@ def web_selectNextPage():
 			time.sleep(0.1)
 			app.processEvents()
 
-		# TODO: export
 		print "export", curPage, "..."
 		exportCurPage()
-		#debug_shell(locals(), globals())
-		#return
+		pagelist.append(curPage)
 	
 		# select next
 		_,_,nextPageNode = findPageSelectorNodes()

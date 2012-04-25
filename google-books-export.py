@@ -142,7 +142,7 @@ def submitClickNative(n):
 	
 def onFinishedLoading( result ):
 	global webNextAction
-	print "finished loading:", web.mainFrame().baseUrl()
+	#print "finished loading:", web.mainFrame().baseUrl()
 	if webNextAction is None: return
 	#print "huhu", result, webNextAction
 	#dumpHtmlTree(web)
@@ -305,6 +305,12 @@ def imgVisibleRect(imgNode):
 	curVisible = curVisible.translated(-imgNode.geometry().topLeft()) # relative
 	return curVisible
 
+prefixFilename = "book-"
+
+def getFilenameForPage(num):
+	global mydir, prefixFilename
+	return mydir + "/" + prefixFilename + "-pg%i.png" % num
+
 def exportCurPage():
 	global mydir, web
 	curPage = getCurPage()
@@ -346,7 +352,7 @@ def exportCurPage():
 			break
 	
 	imgPainter.end()
-	img.save(mydir + "/page%i.png" % curPage)
+	img.save(getFilenameForPage(curPage))
 
 pagelist = []
 
@@ -378,7 +384,6 @@ def web_selectNextPage():
 		_,_,nextPageNode = findPageSelectorNodes()
 		submitClickNative(nextPageNode)
 		
-
 def fixupBookUrl(url):
 	import urlparse, urllib
 	parsedUrl = list(urlparse.urlparse(url))
@@ -387,18 +392,39 @@ def fixupBookUrl(url):
 	query["hl"] = "en"
 	parsedUrl[4] = urllib.urlencode(query)
 	return urlparse.urlunparse(parsedUrl)
+
+def getBookId(url):
+	import urlparse, urllib
+	parsedUrl = list(urlparse.urlparse(url))
+	query = dict(urlparse.parse_qsl(parsedUrl[4]))
+	if "id" in query: return query["id"]
+	import hashlib
+	return hashlib.sha1(parsedUrl[4]).hexdigest()
+
+def createPdf():
+	global mydir, prefixFilename, startPage, endPage
+	fn = "%s-%i-%i.pdf" % (prefixFilename, startPage, endPage)
+	print "create pdf", fn, "..."
+	os.system(
+		"pdfjam " +
+		"--outfile " + mydir + "/" + fn +
+		" -- " +
+		" ".join([getFilenameForPage(i) for i in pagelist])
+		)
 	
 def doExport():
-	global webNextAction, success, bookUrl
-	success = False
-	webNextAction = web_selectNextPage
+	global webNextAction, prefixFilename, bookUrl
 	bookUrl = fixupBookUrl(bookUrl)
+	bookId = getBookId(bookUrl)
+	prefixFilename = "book-" + bookId
+	
+	webNextAction = web_selectNextPage
 	loadUrl(bookUrl)
 	while webNextAction is not None:
 		time.sleep(0.1)
 		app.processEvents()
-	return success
 
+	createPdf()
 
 mydir = os.path.dirname(__file__)
 LogFile = mydir + "/google-books-export.log"

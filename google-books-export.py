@@ -183,17 +183,24 @@ def showMacDockIcon():
 	print "TransformProcessType:", r
 
 def hideMacDockIcon():
-	# http://stackoverflow.com/a/9220857/133374
+	# http://stackoverflow.com/a/9220840/133374
 	import AppKit
+	info = AppKit.NSBundle.mainBundle().infoDictionary()
+	info["LSBackgroundOnly"] = "1"
+	
 	# https://developer.apple.com/library/mac/#documentation/AppKit/Reference/NSRunningApplication_Class/Reference/Reference.html
 	NSApplicationActivationPolicyRegular = 0
 	NSApplicationActivationPolicyAccessory = 1
 	NSApplicationActivationPolicyProhibited = 2
-	AppKit.NSApp.setActivationPolicy_(NSApplicationActivationPolicyProhibited)
-		
-app = QApplication(sys.argv)
+	try:
+		AppKit.NSApp.setActivationPolicy_(NSApplicationActivationPolicyProhibited)
+	except AttributeError: # if the app is not ready, this will happen
+		pass
+	
 if sys.platform == "darwin" and not debug:
 	hideMacDockIcon()
+
+app = QApplication(sys.argv)
 
 if debug:
 	view = QWebView()

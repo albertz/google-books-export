@@ -140,6 +140,9 @@ def submitClickNative(n):
 	releaseEvent = QMouseEvent(QMouseEvent.MouseButtonRelease, *eventArgs)
 	app.sendEvent(web, releaseEvent)
 	
+
+webNextAction = None
+
 def onFinishedLoading( result ):
 	global webNextAction
 	#print "finished loading:", web.mainFrame().baseUrl()
@@ -226,9 +229,10 @@ def loadUrl(l):
 debug_shell_here = lambda: debug_shell(locals(), globals())
 
 try: bookUrl = sys.argv[1]
-except:
+except IndexError:
 	loadUrl("http://books.google.com")
 	assert view, "we need user interaction"
+	view.show()
 	raw_input("Press enter once you selected the book")
 	bookUrl = unicode(web.mainFrame().baseUrl())
 
@@ -286,8 +290,15 @@ def findPageImages():
 	return sorted(pageImages.iteritems())
 
 
-startPage = int(sys.argv[2])
-endPage = int(sys.argv[3])
+try:
+	startPage = int(sys.argv[2])
+	endPage = int(sys.argv[3])
+except IndexError as e:
+	print "Warning: no page numbers provided"
+	print e
+	startPage = 1
+	endPage = 100
+
 assert startPage <= endPage
 
 def getPageImage(num):
